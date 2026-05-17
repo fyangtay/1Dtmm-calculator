@@ -1,23 +1,131 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>TMM Calculator</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1D TMM Calculator</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 </head>
-
 <body>
-  <h1>1D Transfer Matrix Method Calculator</h1>
+  <main>
+    <h1>1D Transfer Matrix Method Calculator</h1>
+    <p class="subtitle">Browser-based JavaScript version converted from the MATLAB TMM Live Script.</p>
 
-  <p>This is a test version of my online TMM tool.</p>
+    <section class="card">
+      <h2>Layer stack</h2>
+      <p>Enter comma-separated refractive indices and thicknesses. Complex numbers can be written as <code>400+500i</code>.</p>
+      <label>n list</label>
+      <textarea id="nList" rows="3">3.42, 1, 3.42, 1, 3.42, 1, 3.42, 1, 3.42</textarea>
 
-  <label>Wavelength, nm:</label>
-  <input id="lambda" type="number" value="800">
+      <label>d list, meters</label>
+      <textarea id="dList" rows="3">50e-6, 197e-6, 50e-6, 197e-6, 100e-6, 197e-6, 50e-6, 197e-6, 50e-6</textarea>
+    </section>
 
-  <button onclick="runTMM()">Calculate</button>
+    <section class="card grid">
+      <div>
+        <label>Start frequency, THz</label>
+        <input id="fStart" type="number" step="0.001" value="0" />
+      </div>
+      <div>
+        <label>Stop frequency, THz</label>
+        <input id="fStop" type="number" step="0.001" value="2.5" />
+      </div>
+      <div>
+        <label>Frequency step, THz</label>
+        <input id="fStep" type="number" step="0.001" value="0.001" />
+      </div>
+      <div>
+        <label>Bandgap min, THz</label>
+        <input id="bgMin" type="number" step="0.001" value="0.3" />
+      </div>
+      <div>
+        <label>Bandgap max, THz</label>
+        <input id="bgMax" type="number" step="0.001" value="0.55" />
+      </div>
+      <div>
+        <label>Peak number</label>
+        <input id="peakNumber" type="number" step="1" value="1" />
+      </div>
+    </section>
 
-  <p id="result"></p>
+    <button onclick="runCalculator()">Run TMM</button>
+
+    <section class="card">
+      <h2>Detected cavity peaks</h2>
+      <pre id="peaks">Not calculated yet.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Transmittance and reflectance</h2>
+      <div id="spectrumPlot" class="plot"></div>
+    </section>
+
+    <section class="card">
+      <h2>Electric-field profile</h2>
+      <div id="fieldPlot" class="plot"></div>
+    </section>
+  </main>
 
   <script src="tmm.js"></script>
+  <script>
+    function readInputs() {
+      const nList = parseList(document.getElementById("nList").value).map(parseComplexToken);
+      const dList = parseList(document.getElementById("dList").value).map(Number);
+
+      if (nList.length !== dList.length) {
+        throw new Error(`n list has ${nList.length} entries, but d list has ${dList.length} entries.`);
+      }
+
+      return {
+        nList,
+        dList,
+        fStartTHz: Number(document.getElementById("fStart").value),
+        fStopTHz: Number(document.getElementById("fStop").value),
+        fStepTHz: Number(document.getElementById("fStep").value),
+        bandgapTHz: [Number(document.getElementById("bgMin").value), Number(document.getElementById("bgMax").value)],
+        peakNumber: Number(document.getElementById("peakNumber").value)
+      };
+    }
+
+    function runCalculator() {
+      try {
+        const params = readInputs();
+        const out = scanTMM(params);
+
+        const peakText = out.peaks.length
+          ? out.peaks.map((p, idx) => `${idx + 1}: ${Number(p.x / 1e12).toFixed(6)} THz, T = ${p.y.toExponential(4)}`).join("\n")
+          : "No peaks found inside the selected bandgap.";
+        document.getElementById("peaks").textContent = peakText;
+
+        Plotly.newPlot("spectrumPlot", [
+          { x: out.fTHz, y: out.T, name: "T", mode: "lines" },
+          { x: out.fTHz, y: out.R, name: "R", mode: "lines" }
+        ], {
+          margin: { t: 20, r: 20, b: 50, l: 60 },
+          xaxis: { title: "Frequency (THz)" },
+          yaxis: { title: "T / R" },
+          legend: { orientation: "h" }
+        }, { responsive: true });
+
+        if (out.field) {
+          Plotly.newPlot("fieldPlot", [
+            { x: out.field.totalD.map(v => v * 1e6), y: out.field.totalE, name: "|E|", mode: "lines" }
+          ], {
+            margin: { t: 20, r: 20, b: 50, l: 60 },
+            xaxis: { title: "Position (µm)" },
+            yaxis: { title: "Electric field, a.u." }
+          }, { responsive: true });
+        } else {
+          Plotly.purge("fieldPlot");
+          document.getElementById("fieldPlot").innerHTML = "<p>No field profile because no peak was selected/found.</p>";
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    window.addEventListener("load", runCalculator);
+  </script>
 </body>
 </html>
