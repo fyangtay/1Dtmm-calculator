@@ -1,138 +1,86 @@
-/*
-  1D Transfer Matrix Method calculator converted from MATLAB Live Script.
-  Original MATLAB logic:
-    - TMM1D(n, d, freq)
-    - TMM1DEfield(n, d, f)
-    - optional quantum-well cyclotron-resonance dielectric function
-
-  Units:
-    - frequency: Hz
-    - thickness: m
-    - n: complex refractive index
-*/
+// 1D Transfer Matrix Method calculator translated from the uploaded MATLAB Live Script.
+// Units:
+//   frequency inputs are displayed in THz but converted to Hz internally.
+//   layer thicknesses are in meters.
 
 const C0 = 299792458;
-const EPS0 = 8.85418782e-12;
-const QE = 1.60217662e-19;
-const ME = 9.11e-31;
 
-class Complex {
-  constructor(re = 0, im = 0) {
-    this.re = re;
-    this.im = im;
-  }
-  static from(x) {
-    if (x instanceof Complex) return x;
-    if (typeof x === "number") return new Complex(x, 0);
-    if (typeof x === "object" && x !== null && "re" in x) return new Complex(x.re, x.im || 0);
-    throw new Error("Cannot convert to Complex: " + x);
-  }
-  add(z) { z = Complex.from(z); return new Complex(this.re + z.re, this.im + z.im); }
-  sub(z) { z = Complex.from(z); return new Complex(this.re - z.re, this.im - z.im); }
-  mul(z) {
-    z = Complex.from(z);
-    return new Complex(this.re * z.re - this.im * z.im, this.re * z.im + this.im * z.re);
-  }
-  div(z) {
-    z = Complex.from(z);
-    const den = z.re * z.re + z.im * z.im;
-    return new Complex((this.re * z.re + this.im * z.im) / den, (this.im * z.re - this.re * z.im) / den);
-  }
-  neg() { return new Complex(-this.re, -this.im); }
-  abs() { return Math.hypot(this.re, this.im); }
-  exp() {
-    const e = Math.exp(this.re);
-    return new Complex(e * Math.cos(this.im), e * Math.sin(this.im));
-  }
-  sqrt() {
-    const r = this.abs();
-    const theta = Math.atan2(this.im, this.re) / 2;
-    return new Complex(Math.sqrt(r) * Math.cos(theta), Math.sqrt(r) * Math.sin(theta));
-  }
-  toString(ndigits = 4) {
-    const a = this.re.toFixed(ndigits);
-    const b = Math.abs(this.im).toFixed(ndigits);
-    const s = this.im >= 0 ? "+" : "-";
-    return `${a} ${s} ${b}i`;
-  }
+// -----------------------------------------------------------------------------
+// Complex arithmetic
+// -----------------------------------------------------------------------------
+function c(re, im = 0) { return { re, im }; }
+function cadd(a, b) { return c(a.re + b.re, a.im + b.im); }
+function csub(a, b) { return c(a.re - b.re, a.im - b.im); }
+function cmul(a, b) { return c(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re); }
+function cdiv(a, b) {
+  const den = b.re * b.re + b.im * b.im;
+  return c((a.re * b.re + a.im * b.im) / den, (a.im * b.re - a.re * b.im) / den);
+}
+function cabs2(a) { return a.re * a.re + a.im * a.im; }
+function cabs(a) { return Math.sqrt(cabs2(a)); }
+function cexp(a) {
+  const er = Math.exp(a.re);
+  return c(er * Math.cos(a.im), er * Math.sin(a.im));
+}
+function csqrt(z) {
+  const r = Math.hypot(z.re, z.im);
+  const re = Math.sqrt((r + z.re) / 2);
+  const im = Math.sign(z.im || 1) * Math.sqrt(Math.max((r - z.re) / 2, 0));
+  return c(re, im);
 }
 
-const I = new Complex(0, 1);
-const C = (re, im = 0) => new Complex(re, im);
-
-function cadd(a, b) { return Complex.from(a).add(b); }
-function csub(a, b) { return Complex.from(a).sub(b); }
-function cmul(a, b) { return Complex.from(a).mul(b); }
-function cdiv(a, b) { return Complex.from(a).div(b); }
-function cexp(a) { return Complex.from(a).exp(); }
-function csqrt(a) { return Complex.from(a).sqrt(); }
-
-function mat2(A, B, Cc, D) {
-  return [[Complex.from(A), Complex.from(B)], [Complex.from(Cc), Complex.from(D)]];
-}
-
-function matMul(A, B) {
+// -----------------------------------------------------------------------------
+// 2x2 complex matrices
+// -----------------------------------------------------------------------------
+function m2(a00, a01, a10, a11) { return [[a00, a01], [a10, a11]]; }
+function mmul(A, B) {
   return [
-    [A[0][0].mul(B[0][0]).add(A[0][1].mul(B[1][0])), A[0][0].mul(B[0][1]).add(A[0][1].mul(B[1][1]))],
-    [A[1][0].mul(B[0][0]).add(A[1][1].mul(B[1][0])), A[1][0].mul(B[0][1]).add(A[1][1].mul(B[1][1]))]
+    [cadd(cmul(A[0][0], B[0][0]), cmul(A[0][1], B[1][0])),
+     cadd(cmul(A[0][0], B[0][1]), cmul(A[0][1], B[1][1]))],
+    [cadd(cmul(A[1][0], B[0][0]), cmul(A[1][1], B[1][0])),
+     cadd(cmul(A[1][0], B[0][1]), cmul(A[1][1], B[1][1]))]
+  ];
+}
+function mvecmul(A, v) {
+  return [
+    cadd(cmul(A[0][0], v[0]), cmul(A[0][1], v[1])),
+    cadd(cmul(A[1][0], v[0]), cmul(A[1][1], v[1]))
+  ];
+}
+function minv(A) {
+  const det = csub(cmul(A[0][0], A[1][1]), cmul(A[0][1], A[1][0]));
+  return [
+    [cdiv(A[1][1], det), cdiv(cmul(c(-1), A[0][1]), det)],
+    [cdiv(cmul(c(-1), A[1][0]), det), cdiv(A[0][0], det)]
   ];
 }
 
-function matVecMul(A, v) {
-  return [
-    A[0][0].mul(v[0]).add(A[0][1].mul(v[1])),
-    A[1][0].mul(v[0]).add(A[1][1].mul(v[1]))
-  ];
-}
+// -----------------------------------------------------------------------------
+// User-editable default structure from MATLAB script
+// -----------------------------------------------------------------------------
+const nAir = c(1, 0);
+const nSi = c(3.42, 0);
+const nDefect = c(3.42, 0);
+const nGold = c(400, 500); // currently not used in default stack, preserved from MATLAB code.
 
-function matInv2(A) {
-  const det = A[0][0].mul(A[1][1]).sub(A[0][1].mul(A[1][0]));
-  return [
-    [A[1][1].div(det), A[0][1].neg().div(det)],
-    [A[1][0].neg().div(det), A[0][0].div(det)]
-  ];
-}
+const dAir = 197e-6;
+const dSi = 50e-6;
+const dDefect = 100e-6;
+const dGold = 150e-9;
 
-function linspace(start, stop, num) {
-  if (num <= 1) return [start];
-  const arr = [];
-  const step = (stop - start) / (num - 1);
-  for (let i = 0; i < num; i++) arr.push(start + step * i);
-  return arr;
-}
+const nListDefault = [nSi, nAir, nSi, nAir, nDefect, nAir, nSi, nAir, nSi];
+const dListDefault = [dSi, dAir, dSi, dAir, dDefect, dAir, dSi, dAir, dSi];
 
-function arange(start, stop, step) {
-  const arr = [];
-  for (let x = start; x <= stop + step * 1e-9; x += step) arr.push(x);
-  return arr;
-}
+let lastResult = null;
 
-function parseComplexToken(token) {
-  // Accept examples: 3.42, 1, 400+500i, 400-500i, 2.1+0.03j
-  const s = String(token).trim().replace(/j/g, "i").replace(/\s+/g, "");
-  if (!s.includes("i")) return C(Number(s), 0);
-  const noI = s.replace("i", "");
-  const match = noI.match(/^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)([+-]\d*\.?\d+(?:e[+-]?\d+)?)$/i);
-  if (match) return C(Number(match[1]), Number(match[2]));
-  if (noI === "" || noI === "+") return C(0, 1);
-  if (noI === "-") return C(0, -1);
-  return C(0, Number(noI));
-}
-
-function parseList(str) {
-  return String(str)
-    .split(/[;,\n]+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-
+// -----------------------------------------------------------------------------
+// TMM core: equivalent to MATLAB TMM1D(n,d,freq)
+// -----------------------------------------------------------------------------
 function tmm1D(nList, dList, freqHz) {
   const k0 = 2 * Math.PI * freqHz / C0;
-  const k = nList.map(n => Complex.from(n).mul(k0));
+  const k = nList.map(n => cmul(n, c(k0, 0)));
 
-  const D0 = mat2(1, 1, k0, -k0);
-  const D0inv = matInv2(D0);
-
+  const D0 = m2(c(1), c(1), c(k0), c(-k0));
   const D = [];
   const Dinv = [];
   const P = [];
@@ -141,22 +89,23 @@ function tmm1D(nList, dList, freqHz) {
   let Mat = null;
 
   for (let l = 0; l < k.length; l++) {
-    D[l] = mat2(1, 1, k[l], k[l].neg());
-    Dinv[l] = matInv2(D[l]);
+    D[l] = m2(c(1), c(1), k[l], cmul(c(-1), k[l]));
+    Dinv[l] = minv(D[l]);
 
-    const phaseForward = I.mul(k[l]).mul(dList[l]).exp();
-    const phaseBackward = I.neg().mul(k[l]).mul(dList[l]).exp();
-    P[l] = mat2(phaseForward, 0, 0, phaseBackward);
-    Pinv[l] = matInv2(P[l]);
+    const phase = cmul(k[l], c(0, dList[l])); // i*k*d
+    const expForward = cexp(phase);
+    const expBackward = cexp(cmul(c(-1), phase));
+    P[l] = m2(expForward, c(0), c(0), expBackward);
+    Pinv[l] = minv(P[l]);
 
-    const segment = matMul(matMul(D[l], Pinv[l]), Dinv[l]);
+    const layerMat = mmul(mmul(D[l], Pinv[l]), Dinv[l]);
 
     if (l === 0) {
-      Mat = matMul(D0inv, segment);
+      Mat = mmul(minv(D0), layerMat);
     } else if (l === k.length - 1) {
-      Mat = matMul(matMul(Mat, segment), D0);
+      Mat = mmul(mmul(Mat, layerMat), D0);
     } else {
-      Mat = matMul(Mat, segment);
+      Mat = mmul(Mat, layerMat);
     }
   }
 
@@ -165,122 +114,218 @@ function tmm1D(nList, dList, freqHz) {
 
 function calcTR(nList, dList, freqHz) {
   const { Mat } = tmm1D(nList, dList, freqHz);
-  const t = C(1, 0).div(Mat[0][0]);
-  const r = Mat[1][0].div(Mat[0][0]);
-  return {
-    T: t.abs() ** 2,
-    R: r.abs() ** 2,
-    t,
-    r,
-    Mat
-  };
+  const T = 1 / cabs2(Mat[0][0]);
+  const R = cabs2(cdiv(Mat[1][0], Mat[0][0]));
+  return { T, R };
 }
 
-function tmm1DEfield(nList, dList, freqHz, pointsPerLayer = 500) {
+// Equivalent to MATLAB TMM1DEfield(n,d,f,pointsPerLayer) but returns arrays for plotting.
+function tmm1DEfield(nList, dList, freqHz, samplesPerLayer = 500) {
   const { k, D, Dinv, P, D0, Mat } = tmm1D(nList, dList, freqHz);
 
-  const vec0 = matVecMul(Mat, [C(1, 0), C(0, 0)]);
-  const vec = [];
-  vec[0] = matVecMul(matMul(Dinv[0], D0), vec0);
+  const vec0 = mvecmul(Mat, [c(1), c(0)]);
+  const vecs = [];
+  vecs[0] = mvecmul(mmul(Dinv[0], D0), vec0);
 
-  let totalD = linspace(0.001e-6, dList[0], pointsPerLayer);
-  let totalE = totalD.map(z => {
-    const Ef = vec[0][0].mul(I.mul(k[0]).mul(z).exp());
-    const Eb = vec[0][1].mul(I.neg().mul(k[0]).mul(z).exp());
-    return Ef.add(Eb).abs();
-  });
+  const totalD = [];
+  const totalE = [];
+  const materialRegions = [];
 
-  for (let l = 1; l < nList.length; l++) {
-    vec[l] = matVecMul(matMul(matMul(Dinv[l], D[l - 1]), P[l - 1]), vec[l - 1]);
-    const zLocal = linspace(0, dList[l], pointsPerLayer);
-    const offset = totalD[totalD.length - 1];
-    const eLocal = zLocal.map(z => {
-      const Ef = vec[l][0].mul(I.mul(k[l]).mul(z).exp());
-      const Eb = vec[l][1].mul(I.neg().mul(k[l]).mul(z).exp());
-      return Ef.add(Eb).abs();
-    });
-    totalE = totalE.concat(eLocal);
-    totalD = totalD.concat(zLocal.map(z => z + offset));
+  let offset = 0;
+
+  for (let l = 0; l < nList.length; l++) {
+    if (l > 0) {
+      vecs[l] = mvecmul(mmul(mmul(Dinv[l], D[l - 1]), P[l - 1]), vecs[l - 1]);
+    }
+
+    if (Math.abs(nList[l].re - 1) > 1e-12 || Math.abs(nList[l].im) > 1e-12) {
+      materialRegions.push({ x0: offset, x1: offset + dList[l] });
+    }
+
+    for (let i = 0; i < samplesPerLayer; i++) {
+      const z = dList[l] * i / (samplesPerLayer - 1);
+      const forward = cmul(vecs[l][0], cexp(cmul(k[l], c(0, z))));
+      const backward = cmul(vecs[l][1], cexp(cmul(k[l], c(0, -z))));
+      const E = cabs(cadd(forward, backward));
+      totalD.push(offset + z);
+      totalE.push(E);
+    }
+
+    offset += dList[l];
   }
 
-  return { totalD, totalE, height: Math.max(...totalE) };
+  return { totalD, totalE, materialRegions, height: Math.max(...totalE) };
 }
 
 function findPeaks(y, x) {
   const peaks = [];
   for (let i = 1; i < y.length - 1; i++) {
-    if (y[i] > y[i - 1] && y[i] > y[i + 1]) {
-      peaks.push({ x: x[i], y: y[i], index: i });
+    if (y[i] > y[i - 1] && y[i] >= y[i + 1]) {
+      peaks.push({ index: i, x: x[i], y: y[i] });
     }
   }
   return peaks;
 }
 
-function scanTMM({
-  nList,
-  dList,
-  fStartTHz = 0,
-  fStopTHz = 2.5,
-  fStepTHz = 0.001,
-  bandgapTHz = [0.3, 0.55],
-  peakThresholdFraction = 0.001,
-  peakNumber = 1
-}) {
-  const fTHz = arange(fStartTHz, fStopTHz, fStepTHz);
-  const fHz = fTHz.map(v => v * 1e12);
+function readNumber(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function linspaceFrequencyTHz(start, stop, step) {
+  const f = [];
+  const n = Math.floor((stop - start) / step + 1e-12) + 1;
+  for (let i = 0; i < n; i++) {
+    const val = start + i * step;
+    if (val <= stop + step * 1e-9) f.push(val);
+  }
+  return f;
+}
+
+function runTMM() {
+  const fStart = readNumber("fStart");
+  const fStop = readNumber("fStop");
+  const fStep = readNumber("fStep");
+
+  if (!(fStart > 0) || !(fStop > fStart) || !(fStep > 0)) {
+    alert("Please check that start frequency > 0, stop frequency > start frequency, and frequency step > 0.");
+    return;
+  }
+
+  const fTHz = linspaceFrequencyTHz(fStart, fStop, fStep);
   const T = [];
   const R = [];
 
-  for (const f of fHz) {
-    const out = calcTR(nList, dList, f);
+  for (const f of fTHz) {
+    const out = calcTR(nListDefault, dListDefault, f * 1e12);
     T.push(out.T);
     R.push(out.R);
   }
 
-  const maxT = Math.max(...T);
-  let peaks = findPeaks(T, fHz).filter(p => p.y > peakThresholdFraction * maxT);
-  peaks = peaks.filter(p => p.x > bandgapTHz[0] * 1e12 && p.x < bandgapTHz[1] * 1e12);
+  lastResult = { fTHz, T, R, nList: nListDefault, dList: dListDefault };
 
-  let field = null;
-  if (peaks.length >= peakNumber) {
-    field = tmm1DEfield(nList, dList, peaks[peakNumber - 1].x, 500);
+  plotSpectra();
+  updatePeaksAndField();
+}
+
+function plotSpectra() {
+  if (!lastResult) return;
+
+  const traceT = {
+    x: lastResult.fTHz,
+    y: lastResult.T,
+    mode: "lines",
+    name: "Transmittance, T"
+  };
+
+  const traceR = {
+    x: lastResult.fTHz,
+    y: lastResult.R,
+    mode: "lines",
+    name: "Reflectance, R"
+  };
+
+  Plotly.react("spectraPlot", [traceT, traceR], {
+    margin: { l: 70, r: 25, t: 20, b: 65 },
+    xaxis: { title: "Frequency (THz)" },
+    yaxis: { title: "T / R" },
+    legend: { orientation: "h", x: 0, y: 1.12 },
+    hovermode: "x unified"
+  }, { responsive: true });
+}
+
+function updatePeaksAndField() {
+  if (!lastResult) {
+    document.getElementById("peakList").textContent = "Run TMM to detect peaks.";
+    document.getElementById("fieldInfo").textContent = "Run TMM to calculate the electric-field profile.";
+    return;
   }
 
-  return { fTHz, fHz, T, R, peaks, field };
+  const peakMin = readNumber("peakMin");
+  const peakMax = readNumber("peakMax");
+  const requestedPeakNumber = Math.max(1, Math.round(readNumber("peakNumber")));
+
+  if (!(peakMax > peakMin)) {
+    document.getElementById("peakList").textContent = "Freq max for peaks must be larger than Freq min for peaks.";
+    document.getElementById("fieldInfo").textContent = "Electric-field profile not updated because the peak range is invalid.";
+    Plotly.purge("fieldPlot");
+    return;
+  }
+
+  const maxT = Math.max(...lastResult.T);
+  const allPeaks = findPeaks(lastResult.T, lastResult.fTHz);
+  const peaks = allPeaks.filter(p => p.y > 0.001 * maxT && p.x > peakMin && p.x < peakMax);
+
+  const peakListText = peaks.length === 0
+    ? "No peaks found in the selected frequency range."
+    : peaks.map((p, i) => `${i + 1}: ${p.x.toFixed(6)} THz, T = ${p.y.toExponential(4)}`).join("\n");
+
+  document.getElementById("peakList").textContent = peakListText;
+
+  if (peaks.length === 0) {
+    document.getElementById("fieldInfo").textContent = "No electric-field profile is shown because no peak was found in the selected range.";
+    Plotly.purge("fieldPlot");
+    return;
+  }
+
+  let peakNumber = requestedPeakNumber;
+  if (peakNumber > peaks.length) {
+    peakNumber = peaks.length;
+    document.getElementById("peakNumber").value = peakNumber;
+  }
+
+  const selectedPeak = peaks[peakNumber - 1];
+  plotElectricField(selectedPeak, peakNumber, peaks.length);
 }
 
-function qwRefractiveIndex({ freqHz, B, mEff = 0.07 * ME, gamma = 5.9e9, nE = 10 * 3.2e11 * 1e4, dQW = 2.3e-6, epsBg = 3.6 ** 2 }) {
-  const omega = 2 * Math.PI * freqHz;
-  const omegaC = QE * B / mEff;
-  const numerator = nE * QE ** 2 / mEff;
-  const denom = C(gamma, -(omega - omegaC)); // gamma - i(omega - omega_c)
-  const sigma = C(numerator, 0).div(denom);
-  const epsCR = C(epsBg, 0).add(I.mul(sigma).div(EPS0 * omega * dQW));
-  return epsCR.sqrt();
-}
+function plotElectricField(selectedPeak, peakNumber, totalPeaks) {
+  const freqHz = selectedPeak.x * 1e12;
+  const field = tmm1DEfield(lastResult.nList, lastResult.dList, freqHz, 500);
 
-function defaultCavity() {
-  const nAir = C(1, 0);
-  const nSi = C(3.42, 0);
-  const nDefect = C(3.42, 0);
-  const dAir = 197e-6;
-  const dSi = 50e-6;
-  const dDefect = 100e-6;
+  const xUm = field.totalD.map(v => v * 1e6);
 
-  return {
-    nList: [nSi, nAir, nSi, nAir, nDefect, nAir, nSi, nAir, nSi],
-    dList: [dSi, dAir, dSi, dAir, dDefect, dAir, dSi, dAir, dSi]
+  const fieldTrace = {
+    x: xUm,
+    y: field.totalE,
+    mode: "lines",
+    name: "|E|"
   };
+
+  const shapes = field.materialRegions.map(region => ({
+    type: "rect",
+    xref: "x",
+    yref: "paper",
+    x0: region.x0 * 1e6,
+    x1: region.x1 * 1e6,
+    y0: 0,
+    y1: 1,
+    fillcolor: "rgba(160,160,160,0.20)",
+    line: { width: 0 },
+    layer: "below"
+  }));
+
+  document.getElementById("fieldInfo").textContent =
+    `Showing peak ${peakNumber} of ${totalPeaks}: frequency = ${selectedPeak.x.toFixed(6)} THz, T = ${selectedPeak.y.toExponential(4)}.`;
+
+  Plotly.react("fieldPlot", [fieldTrace], {
+    margin: { l: 70, r: 25, t: 20, b: 65 },
+    xaxis: { title: "Position, d (µm)" },
+    yaxis: { title: "Electric field, |E| (a.u.)" },
+    shapes,
+    hovermode: "x"
+  }, { responsive: true });
 }
 
-// Expose functions globally for simple HTML usage.
-window.Complex = Complex;
-window.C = C;
-window.parseComplexToken = parseComplexToken;
-window.parseList = parseList;
-window.tmm1D = tmm1D;
-window.calcTR = calcTR;
-window.tmm1DEfield = tmm1DEfield;
-window.scanTMM = scanTMM;
-window.qwRefractiveIndex = qwRefractiveIndex;
-window.defaultCavity = defaultCavity;
+// Event listeners
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("runButton").addEventListener("click", runTMM);
+
+  // These controls do not need to recalculate the whole spectrum.
+  // They only refilter the already-calculated peaks and then update the field profile.
+  ["peakMin", "peakMax", "peakNumber"].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener("input", updatePeaksAndField);
+    el.addEventListener("change", updatePeaksAndField);
+  });
+
+  runTMM();
+});

@@ -1,82 +1,136 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
+  background: #f2f2f2;
+  color: #111;
   font-family: Arial, Helvetica, sans-serif;
-  background: #f7f7f7;
-  color: #222;
 }
 
 main {
-  max-width: 1050px;
+  max-width: 1450px;
   margin: 0 auto;
-  padding: 32px 18px 60px;
+  padding: 24px 10px 48px;
 }
 
 h1 {
-  margin-bottom: 4px;
+  margin: 0 0 22px;
+  font-size: 32px;
 }
 
-.subtitle {
-  margin-top: 0;
-  color: #555;
+h2 {
+  margin: 0 0 20px;
+  font-size: 26px;
+}
+
+h3 {
+  margin: 24px 0 10px;
+  font-size: 22px;
 }
 
 .card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 18px;
-  margin: 18px 0;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+  background: white;
+  border-radius: 20px;
+  padding: 26px;
+  margin: 0 0 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
+  gap: 18px;
+}
+
+.controls-top {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.controls-peak {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
 }
 
 label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 22px;
 }
 
-textarea,
 input {
   width: 100%;
-  box-sizing: border-box;
   border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 9px;
-  font-size: 15px;
+  border-radius: 11px;
+  padding: 12px 14px;
+  font-size: 22px;
+  font-weight: 400;
+  background: white;
 }
 
 button {
+  margin-top: 22px;
   border: none;
-  border-radius: 10px;
-  padding: 12px 18px;
-  font-size: 16px;
-  cursor: pointer;
-  background: #222;
+  border-radius: 12px;
+  padding: 16px 26px;
+  font-size: 23px;
+  background: #202020;
   color: white;
+  cursor: pointer;
 }
 
 button:hover {
-  opacity: 0.85;
+  background: #000;
+}
+
+.instruction {
+  margin: -4px 0 20px;
+  max-width: 1050px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: #333;
 }
 
 .plot {
-  min-height: 420px;
+  width: 100%;
+  min-height: 500px;
+}
+
+#fieldPlot {
+  min-height: 430px;
 }
 
 pre {
-  white-space: pre-wrap;
-  background: #f2f2f2;
-  padding: 12px;
-  border-radius: 8px;
+  min-height: 120px;
+  margin: 0;
+  padding: 18px;
+  border-radius: 10px;
+  background: #f0f0f0;
+  overflow: auto;
+  font-size: 18px;
+  line-height: 1.35;
 }
 
-code {
-  background: #eee;
-  padding: 2px 5px;
-  border-radius: 4px;
+.small-note {
+  margin-bottom: 10px;
+  font-size: 18px;
+  color: #333;
+}
+
+@media (max-width: 850px) {
+  .controls-top,
+  .controls-peak {
+    grid-template-columns: 1fr;
+  }
+
+  label,
+  input,
+  button {
+    font-size: 18px;
+  }
+
+  .card {
+    padding: 18px;
+  }
 }
