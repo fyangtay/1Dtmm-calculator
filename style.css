@@ -134,3 +134,36 @@ pre {
     padding: 18px;
   }
 }
+
+.controls-layer {
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+}
+
+textarea {
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 11px;
+  padding: 12px 14px;
+  font-size: 18px;
+  font-weight: 400;
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  background: white;
+  resize: vertical;
+  min-height: 130px;
+}
+
+code {
+  background: #f0f0f0;
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+
+@media (max-width: 850px) {
+  .controls-layer {
+    grid-template-columns: 1fr;
+  }
+
+  textarea {
+    font-size: 16px;
+  }
+}

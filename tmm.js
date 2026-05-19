@@ -171,6 +171,77 @@ function readNumber(id) {
   return Number(document.getElementById(id).value);
 }
 
+function splitList(text) {
+  return text
+    .replace(/[;]+/g, ",")
+    .split(/[\s,]+/)
+    .map(v => v.trim())
+    .filter(Boolean);
+}
+
+function parseComplexNumber(token) {
+  let s = token.trim().toLowerCase().replace(/j/g, "i").replace(/\s+/g, "");
+  if (!s) throw new Error("Empty complex number.");
+
+  if (!s.includes("i")) {
+    const re = Number(s);
+    if (!Number.isFinite(re)) throw new Error(`Invalid refractive index: ${token}`);
+    return c(re, 0);
+  }
+
+  s = s.replace(/i/g, "");
+  if (s === "" || s === "+") return c(0, 1);
+  if (s === "-") return c(0, -1);
+
+  // Find the final + or - sign that separates real and imaginary parts.
+  let splitIndex = -1;
+  for (let i = 1; i < s.length; i++) {
+    if ((s[i] === "+" || s[i] === "-") && s[i - 1] !== "e" && s[i - 1] !== "E") {
+      splitIndex = i;
+    }
+  }
+
+  if (splitIndex === -1) {
+    const im = Number(s);
+    if (!Number.isFinite(im)) throw new Error(`Invalid complex refractive index: ${token}`);
+    return c(0, im);
+  }
+
+  const re = Number(s.slice(0, splitIndex));
+  let imText = s.slice(splitIndex);
+  if (imText === "+") imText = "1";
+  if (imText === "-") imText = "-1";
+  const im = Number(imText);
+
+  if (!Number.isFinite(re) || !Number.isFinite(im)) {
+    throw new Error(`Invalid complex refractive index: ${token}`);
+  }
+  return c(re, im);
+}
+
+function readLayerStructure() {
+  const nTokens = splitList(document.getElementById("nListInput").value);
+  const dTokens = splitList(document.getElementById("dListInput").value);
+
+  if (nTokens.length === 0 || dTokens.length === 0) {
+    throw new Error("Please enter both the refractive-index list and the thickness list.");
+  }
+  if (nTokens.length !== dTokens.length) {
+    throw new Error(`The refractive-index list has ${nTokens.length} entries, but the thickness list has ${dTokens.length} entries. They must have the same length.`);
+  }
+
+  const nList = nTokens.map(parseComplexNumber);
+  const dList = dTokens.map((token) => {
+    const valueUm = Number(token);
+    if (!Number.isFinite(valueUm) || valueUm <= 0) {
+      throw new Error(`Invalid thickness: ${token}. Thickness values must be positive numbers in µm.`);
+    }
+    return valueUm * 1e-6;
+  });
+
+  return { nList, dList };
+}
+
 function linspaceFrequencyTHz(start, stop, step) {
   const f = [];
   const n = Math.floor((stop - start) / step + 1e-12) + 1;
@@ -191,17 +262,26 @@ function runTMM() {
     return;
   }
 
+  let layerStructure;
+  try {
+    layerStructure = readLayerStructure();
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+
+  const { nList, dList } = layerStructure;
   const fTHz = linspaceFrequencyTHz(fStart, fStop, fStep);
   const T = [];
   const R = [];
 
   for (const f of fTHz) {
-    const out = calcTR(nListDefault, dListDefault, f * 1e12);
+    const out = calcTR(nList, dList, f * 1e12);
     T.push(out.T);
     R.push(out.R);
   }
 
-  lastResult = { fTHz, T, R, nList: nListDefault, dList: dListDefault };
+  lastResult = { fTHz, T, R, nList, dList };
 
   plotSpectra();
   updatePeaksAndField();
