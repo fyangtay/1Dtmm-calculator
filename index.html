@@ -10,17 +10,25 @@
 <body>
   <main>
     <h1>1D Transfer Matrix Method Calculator</h1>
-
+    <p class="instruction">
+        This website provides an interactive 1D transfer matrix method (TMM) calculator for calculating the transmittance spectrum, reflectance spectrum, and electric field distribution of a multilayer structure.<br>
+        The default setting is for a 1D photonic-crystal cavity (or a Bragg cavity), which has been used to achieve the ultrastrong coupling regime in solid-state systems.<br>
+        See Zhang, Qi, et al., Nature Physics 12.11 (2016): 1005-1011 and Li, Xinwei, et al., Nature Photonics 12.6 (2018): 324-329.<br>
+      </p>
+    
     <section class="card">
       <h2>Frequency scan</h2>
+      <p class="instruction">
+        Please enter the frequency range.
+      </p>
       <div class="grid controls-top">
         <label>
           Start frequency, THz
-          <input id="fStart" type="number" value="0.3" step="0.001" />
+          <input id="fStart" type="number" value="0.1" step="0.001" />
         </label>
         <label>
           Stop frequency, THz
-          <input id="fStop" type="number" value="1.5" step="0.001" />
+          <input id="fStop" type="number" value="2.5" step="0.001" />
         </label>
         <label>
           Frequency step, THz
@@ -32,9 +40,10 @@
     <section class="card">
       <h2>Layer structure</h2>
       <p class="instruction">
-        Enter the refractive-index list and thickness list in the same layer order.
-        Separate values using commas, spaces, or new lines. The two lists must have the same number of entries.
-        Use thickness in <strong>µm</strong>. Complex refractive indices are allowed, for example <code>3.42</code>, <code>1</code>, or <code>400+500i</code>.
+        Enter the refractive-index list and thickness list in the same layer order.<br>
+        Separate values using commas, spaces, or new lines. The two lists must have the same number of entries.<br>
+        Use thickness in <strong>µm</strong>. Complex refractive indices are allowed, for example <code>3.42</code>, <code>1</code>, or <code>400+500i</code>.<br>
+        The default multilayer structure is Si / air / Si / air / defect layer / air / Si / air / Si, where n_Si = 3.42.
       </p>
       <div class="grid controls-layer">
         <label>
@@ -60,20 +69,21 @@
     <section class="card">
       <h2>Peak selection</h2>
       <p class="instruction">
-        Use <strong>Freq min for peaks</strong> and <strong>Freq max for peaks</strong> to define the frequency range used for detecting cavity peaks from the calculated transmittance spectrum. Changing this range or the peak number automatically updates the electric-field profile below.
+        Use <strong>Peaks search freq min</strong> and <strong>Peaks search freq min</strong> to define the frequency range used for detecting cavity peaks from the calculated transmittance spectrum.<br>
+        Changing the peak number to view the electric field profile for the corresponding peak frequency.
       </p>
       <div class="grid controls-peak">
         <label>
-          Freq min for peaks, THz
-          <input id="peakMin" type="number" value="0.42" step="0.001" />
+          Peaks search freq min, THz
+          <input id="peakMin" type="number" value="0.4" step="0.001" />
         </label>
         <label>
-          Freq max for peaks, THz
-          <input id="peakMax" type="number" value="1.5" step="0.001" />
+          Peaks search freq max, THz
+          <input id="peakMax" type="number" value="0.45" step="0.001" />
         </label>
         <label>
           Peak number
-          <input id="peakNumber" type="number" value="11" step="1" min="1" />
+          <input id="peakNumber" type="number" value="1" step="1" min="1" />
         </label>
       </div>
 
