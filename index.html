@@ -69,8 +69,8 @@
     <section class="card">
       <h2>Peak selection</h2>
       <p class="instruction">
-        Use <strong>Peaks search freq min</strong> and <strong>Peaks search freq min</strong> to define the frequency range used for detecting cavity peaks from the calculated transmittance spectrum.<br>
-        Changing the peak number to view the electric field profile for the corresponding peak frequency.
+        Use <strong>Peaks search freq min</strong> and <strong>Peaks search freq max</strong> to define the frequency range used for detecting cavity peaks from the calculated transmittance spectrum.<br>
+        Change the peak number to view the electric field profile for the corresponding peak frequency.
       </p>
       <div class="grid controls-peak">
         <label>
@@ -95,6 +95,10 @@
       <h2>Electric-field profile</h2>
       <div id="fieldInfo" class="small-note">Run TMM to calculate the electric-field profile.</div>
       <div id="fieldPlot" class="plot"></div>
+      <div id="materialLegend" class="material-legend"></div>
+      <p class="small-note">
+        Colored regions indicate the layer positions. Layers with the same refractive index use the same color.
+      </p>
     </section>
   </main>
 

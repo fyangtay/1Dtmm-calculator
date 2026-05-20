@@ -119,6 +119,78 @@ function calcTR(nList, dList, freqHz) {
   return { T, R };
 }
 
+// Make a stable key so layers with the same refractive index receive the same color.
+// The rounding avoids treating tiny floating-point differences as different media.
+function refractiveIndexKey(n) {
+  const re = Math.round(n.re * 1e9) / 1e9;
+  const im = Math.round(n.im * 1e9) / 1e9;
+  return `${re},${im}`;
+}
+
+function formatComplex(n) {
+  const re = Math.round(n.re * 1e6) / 1e6;
+  const im = Math.round(n.im * 1e6) / 1e6;
+  if (Math.abs(im) < 1e-12) return `${re}`;
+  if (Math.abs(re) < 1e-12) return `${im}i`;
+  return `${re}${im >= 0 ? "+" : ""}${im}i`;
+}
+
+const MATERIAL_COLORS = [
+  "rgba(31,119,180,0.16)",
+  "rgba(255,127,14,0.16)",
+  "rgba(44,160,44,0.16)",
+  "rgba(214,39,40,0.16)",
+  "rgba(148,103,189,0.16)",
+  "rgba(140,86,75,0.16)",
+  "rgba(227,119,194,0.16)",
+  "rgba(127,127,127,0.16)",
+  "rgba(188,189,34,0.16)",
+  "rgba(23,190,207,0.16)"
+];
+
+const MATERIAL_BORDER_COLORS = [
+  "rgba(31,119,180,0.55)",
+  "rgba(255,127,14,0.55)",
+  "rgba(44,160,44,0.55)",
+  "rgba(214,39,40,0.55)",
+  "rgba(148,103,189,0.55)",
+  "rgba(140,86,75,0.55)",
+  "rgba(227,119,194,0.55)",
+  "rgba(127,127,127,0.55)",
+  "rgba(188,189,34,0.55)",
+  "rgba(23,190,207,0.55)"
+];
+
+function buildMaterialColorMap(layerRegions) {
+  const map = new Map();
+  for (const region of layerRegions) {
+    if (!map.has(region.key)) {
+      const index = map.size % MATERIAL_COLORS.length;
+      map.set(region.key, {
+        fill: MATERIAL_COLORS[index],
+        border: MATERIAL_BORDER_COLORS[index],
+        label: region.label
+      });
+    }
+  }
+  return map;
+}
+
+function updateMaterialLegend(layerRegions, colorMap) {
+  const legend = document.getElementById("materialLegend");
+  if (!legend) return;
+
+  const uniqueKeys = [...colorMap.keys()];
+  legend.innerHTML = uniqueKeys.map((key) => {
+    const entry = colorMap.get(key);
+    const count = layerRegions.filter(region => region.key === key).length;
+    return `<span class="material-legend-item">
+      <span class="material-swatch" style="background:${entry.fill}; border-color:${entry.border};"></span>
+      n = ${entry.label} <span class="material-count">(${count} layer${count > 1 ? "s" : ""})</span>
+    </span>`;
+  }).join("");
+}
+
 // Equivalent to MATLAB TMM1DEfield(n,d,f,pointsPerLayer) but returns arrays for plotting.
 function tmm1DEfield(nList, dList, freqHz, samplesPerLayer = 500) {
   const { k, D, Dinv, P, D0, Mat } = tmm1D(nList, dList, freqHz);
@@ -129,7 +201,7 @@ function tmm1DEfield(nList, dList, freqHz, samplesPerLayer = 500) {
 
   const totalD = [];
   const totalE = [];
-  const materialRegions = [];
+  const layerRegions = [];
 
   let offset = 0;
 
@@ -138,9 +210,14 @@ function tmm1DEfield(nList, dList, freqHz, samplesPerLayer = 500) {
       vecs[l] = mvecmul(mmul(mmul(Dinv[l], D[l - 1]), P[l - 1]), vecs[l - 1]);
     }
 
-    if (Math.abs(nList[l].re - 1) > 1e-12 || Math.abs(nList[l].im) > 1e-12) {
-      materialRegions.push({ x0: offset, x1: offset + dList[l] });
-    }
+    const materialKey = refractiveIndexKey(nList[l]);
+    layerRegions.push({
+      x0: offset,
+      x1: offset + dList[l],
+      n: nList[l],
+      key: materialKey,
+      label: formatComplex(nList[l])
+    });
 
     for (let i = 0; i < samplesPerLayer; i++) {
       const z = dList[l] * i / (samplesPerLayer - 1);
@@ -154,7 +231,7 @@ function tmm1DEfield(nList, dList, freqHz, samplesPerLayer = 500) {
     offset += dList[l];
   }
 
-  return { totalD, totalE, materialRegions, height: Math.max(...totalE) };
+  return { totalD, totalE, layerRegions, height: Math.max(...totalE) };
 }
 
 function findPeaks(y, x) {
@@ -317,6 +394,8 @@ function updatePeaksAndField() {
   if (!lastResult) {
     document.getElementById("peakList").textContent = "Run TMM to detect peaks.";
     document.getElementById("fieldInfo").textContent = "Run TMM to calculate the electric-field profile.";
+    const legend = document.getElementById("materialLegend");
+    if (legend) legend.innerHTML = "";
     return;
   }
 
@@ -328,6 +407,8 @@ function updatePeaksAndField() {
     document.getElementById("peakList").textContent = "Freq max for peaks must be larger than Freq min for peaks.";
     document.getElementById("fieldInfo").textContent = "Electric-field profile not updated because the peak range is invalid.";
     Plotly.purge("fieldPlot");
+    const legend = document.getElementById("materialLegend");
+    if (legend) legend.innerHTML = "";
     return;
   }
 
@@ -344,6 +425,8 @@ function updatePeaksAndField() {
   if (peaks.length === 0) {
     document.getElementById("fieldInfo").textContent = "No electric-field profile is shown because no peak was found in the selected range.";
     Plotly.purge("fieldPlot");
+    const legend = document.getElementById("materialLegend");
+    if (legend) legend.innerHTML = "";
     return;
   }
 
@@ -370,18 +453,24 @@ function plotElectricField(selectedPeak, peakNumber, totalPeaks) {
     name: "|E|"
   };
 
-  const shapes = field.materialRegions.map(region => ({
-    type: "rect",
-    xref: "x",
-    yref: "paper",
-    x0: region.x0 * 1e6,
-    x1: region.x1 * 1e6,
-    y0: 0,
-    y1: 1,
-    fillcolor: "rgba(160,160,160,0.20)",
-    line: { width: 0 },
-    layer: "below"
-  }));
+  const colorMap = buildMaterialColorMap(field.layerRegions);
+  const shapes = field.layerRegions.map(region => {
+    const entry = colorMap.get(region.key);
+    return {
+      type: "rect",
+      xref: "x",
+      yref: "paper",
+      x0: region.x0 * 1e6,
+      x1: region.x1 * 1e6,
+      y0: 0,
+      y1: 1,
+      fillcolor: entry.fill,
+      line: { color: entry.border, width: 0.5 },
+      layer: "below"
+    };
+  });
+
+  updateMaterialLegend(field.layerRegions, colorMap);
 
   document.getElementById("fieldInfo").textContent =
     `Showing peak ${peakNumber} of ${totalPeaks}: frequency = ${selectedPeak.x.toFixed(6)} THz, T = ${selectedPeak.y.toExponential(4)}.`;
